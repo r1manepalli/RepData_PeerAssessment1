@@ -1,25 +1,201 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
+title: 'Title : Peer Assessment1 R Markdown file'
+author: "r1"
+date: "Saturday, March 14, 2015"
+
+output:
+html_document:
     keep_md: true
+    
 ---
 
-
-## Loading and preprocessing the data
-
-
-
-## What is mean total number of steps taken per day?
+#This is an R Markdown document. For the Peer Assessment 1
+#This document has both code and results
 
 
+```{r}
+library(knitr)
+library(data.table)
+library(ggplot2) 
+library(plyr)
 
-## What is the average daily activity pattern?
+opts_chunk$set(echo = TRUE, results = 'hold')
+```
+
+#Loading and preprocessing the data
+#cleaning the data
+##Demostrating the sample of the data
+
+```{r, echo=TRUE}
+activitydata <- read.csv('activity.csv', header = TRUE, sep = ",",
+                  colClasses=c("numeric", "character", "numeric"))
+activitydata$date <- as.Date(activitydata$date, format = "%Y-%m-%d")
+activitydata$interval <- as.factor(activitydata$interval)
+head(activitydata)
+
+
+```
+# The mean total number of steps taken per day
+##1. the total number of steps taken per day without NA
+### We format the data into a string and produce a mean to show the top few rows
+```{r, echo=TRUE}
+str(activitydata)
+steps_per_day <- aggregate(steps ~ date, activitydata, sum, na.rm=TRUE)
+colnames(steps_per_day) <- c("date","steps")
+head(steps_per_day)
+
+
+```
+
+
+##2. histogram of the total number of steps taken each day
+### We are producing a ggplot for the activity file
+```{r, echo=TRUE}
+ggplot(steps_per_day, aes(x = steps)) + 
+       geom_histogram(fill = "red", binwidth = 1000) + theme_bw() +
+        labs(title="Histogram for Activiy file without nulls", 
+             x = "Steps per Day", y = "Count per day") 
+
+```
+
+##3. Calculate and report the mean and median of the total number of steps taken per day
+
+```{r, echo=TRUE}
+
+mean_of_steps   <- mean(steps_per_day$steps, na.rm=TRUE)
+median_of_steps <- median(steps_per_day$steps, na.rm=TRUE)
+
+mean_of_steps
+median_of_steps
+
+```
 
 
 
-## Imputing missing values
+#the average daily activity pattern
+##1. Making a time series line chart plot using geom_line of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all days (y-axis)
+
+
+```{r, echo=TRUE}
+
+
+steps_interval <- aggregate(activitydata$steps, by = list(interval = activitydata$interval), FUN=mean, na.rm=TRUE)
+steps_interval$interval <- 
+        as.integer(levels(steps_interval$interval)[steps_interval$interval])
+colnames(steps_interval) <- c("interval", "steps")
+ggplot(steps_interval, aes(x=interval, y=steps)) +  theme_bw() + 
+        geom_line(color="blue", size=2) +    geom_jitter() +
+        labs(title="Daily Activity Pattern", x="Interval", y="Steps")  
+        
+
+```
+
+
+#2.Which 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps?
+```{r, echo=TRUE}
+
+ steps_int <-steps_interval[which.max(  
+        steps_interval$steps),]
+```
+
+The step with the maximum step intervals is  `r steps_int`
+
+#Imputing missing values
+##1.Calculate and report the total number of missing values in the dataset (i.e. the total number of rows with NAs)
+```{r,echo=TRUE}
+missing_steps <- sum(is.na(activitydata$steps))
+
+```
+
+The total missing steps are `r missing_steps`
+
+##2. Devising a strategy for filling in all of the missing values in the dataset.
+```{r,echo=TRUE}
+na_fill <- function(data, pervalue) {
+        na_index <- which(is.na(data$steps))
+        na_replace <- unlist(lapply(na_index, FUN=function(idx){
+                interval = data[idx,]$interval
+                pervalue[pervalue$interval == interval,]$steps
+        }))
+        fill_steps <- data$steps
+        fill_steps[na_index] <- na_replace
+        fill_steps
+}
+
+activity_fill <- data.frame(  
+        steps = na_fill(activitydata, steps_interval),  
+        date = activitydata$date,  
+        interval = activitydata$interval)
+str(activity_fill)
+
+
+```
+The total missing steps are `r sum(is.na(activity_fill$steps))`
+
+
+##3.Creating a new dataset that is equal to the original dataset but with the missing data filled in.
+```{r,echo=TRUE}
+
+all_steps_per_day <- aggregate(steps ~ date, activity_fill, sum)
+colnames(all_steps_per_day) <- c("date","steps")
+
+head(all_steps_per_day)
+
+
+```
+
+##4. Make a histogram of the total number of steps taken each day and Calculate and report the mean and median total number of steps taken per day
+```{r, echo=TRUE}
+ggplot(all_steps_per_day, aes(x = steps)) + 
+       geom_histogram(fill = "yellow", binwidth = 1000) + theme_bw() +
+        labs(title="Histogram of All Steps Taken per Day after NA fill", 
+             x = "All Steps per Day", y = "count") 
 
 
 
-## Are there differences in activity patterns between weekdays and weekends?
+```
+
+
+## Missing value analysis:
+```{r,echo=TRUE}
+All_mean_steps   <- mean(all_steps_per_day$steps)
+All_median_steps <- median(all_steps_per_day$steps)
+
+All_mean_steps
+All_median_steps
+
+
+```
+There is a very small differnce between mean_of_steps and All_mean_step.
+There is a very small differnce between median_of_steps and All_median_steps.
+
+#THe differences in activity patterns between weekdays and weekends
+##1. Create a new factor variable in the dataset with two levels ??? weekday and weekend indicating whether a given date is a weekday or weekend day.
+
+```{r,echo=TRUE}
+weekdaytype <- function(date) {
+    if (weekdays(as.Date(date)) %in% c("Saturday", "Sunday")) {
+        "weekend"
+    } else {
+        "weekday"
+    }
+}
+activitydata$weekdaytype <- as.factor(sapply(activitydata$date, weekdaytype))
+
+
+```
+
+
+##2. Making a panel plot containing a time series line plot of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all weekday days or weekend days. 
+
+```{r,echo=TRUE}
+
+par(mfrow = c(2, 1))
+for (type in c("weekend", "weekday")) {
+    agg_weekdays <- aggregate(steps ~ interval, data = activitydata, subset = activitydata$weekdaytype == 
+        type, FUN = mean)
+    plot(agg_weekdays , type = "l", main = type)
+}
+
+```
+
